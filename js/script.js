@@ -1,6 +1,17 @@
 
 const global = {
   currentPage: window.location.pathname,
+  search: {
+    term: '',
+    type: '',
+    page: 1,
+    totalPages: 1,
+    totalResults: 0
+  },
+  api: {
+    apiKey: '711af147f291a70353af78f4391c1d51',
+    apiUrl: 'https://api.themoviedb.org/3/'
+  }
 };
 
 // Display 20 most popular movies
@@ -225,10 +236,171 @@ if (type === 'movie') {
 }
 }
 
+// Search Movies/Shows
+async function search() {
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+
+  global.search.type = urlParams.get('type');
+  global.search.term = urlParams.get('search-term');
+
+  // Testing
+  if (global.search.term !== '' && global.search.term !== null) {
+    const {results, total_pages, page, total_results } = await searchAPIData();
+
+    global.search.page = page;
+    global.search.totalPages = total_pages;
+    global.search.totalResults = total_results;
+    
+    if (results.length === 0) {
+      showAlert('No results are found');
+    }
+
+    displaySearchResults(results);
+
+    document.querySelector('#search-term').value = '';
+
+
+  } else {
+    showAlert('Please enter a search term');
+  }
+}
+
+function displaySearchResults(results) {
+
+  // Showing how to clear search results when you click to next page
+  document.querySelector('#search-results').innerHTML = '';
+  document.querySelector('#search-results-heading').innerHTML = '';
+  document.querySelector('#pagination').innerHTML = '';
+  
+  results.forEach((result) => {
+    const div = document.createElement('div');
+    div.classList.add('card');
+    div.innerHTML = `
+    <a href="${global.search.type}-details.html?id=${result.id}">
+      ${
+  result.poster_path 
+    ? `<img
+    src="https://image.tmdb.org/t/p/w500/${result.poster_path}"
+    class="card-img-top"
+    alt="${global.search.type === 'movie' ? result.title : result.name}"
+  />`
+   : `<img
+  src="../images/no-image.jpg"
+  class="card-img-top"
+  alt="${global.search.type === 'movie' ? result.title : result.name}"
+/>`
+      }
+    </a>
+    <div class="card-body">
+      <h5 class="card-title">${global.search.type === 'movie' ? result.title : result.name}</h5>
+      <p class="card-text">
+        <small class="text-muted">Release: ${global.search.type === 'movie' ? result.release_date : result.first_air_date}</small>
+      </p>
+    </div>`;
+  
+  document.querySelector('#search-results-heading').innerHTML = `
+        <h2>${results.length} of ${global.search.totalResults} Results for ${global.search.term}</h2>
+  `;
+
+  document.querySelector('#search-results').appendChild(div);
+  });
+
+  displayPagination();
+}
+
+// Creating & Displaying Pagination for Search 
+function displayPagination() {
+  const div = document.createElement('div');
+  div.classList.add('pagination');
+  div.innerHTML = `
+  <button class="btn btn-primary" id="prev">Prev</button>
+  <button class="btn btn-primary" id="next">Next</button>
+  <div class="page-counter">Page ${global.search.page} of ${global.search.totalPages}</div>
+  `;
+
+  document.querySelector('#pagination').appendChild(div);
+
+  // Creating a prev button that disables if on first page
+if (global.search.page === 1) {
+  document.querySelector('#prev').disabled = true;
+}
+
+// Creating a next button that disables if on first page
+if (global.search.page === global.search.totalPages) {
+  document.querySelector('#next').disabled = true;
+}
+
+// Displaying next page
+document.querySelector('#next').addEventListener('click', async () => {
+  global.search.page++;
+  const { results, total_pages} = await searchAPIData();
+  displaySearchResults(results);
+});
+
+// Displaying previous page
+document.querySelector('#prev').addEventListener('click', async () => {
+  global.search.page--;
+  const { results, total_pages} = await searchAPIData();
+  displaySearchResults(results);
+});
+}
+
+
+// Display Slider Movies
+async function displaySlider() {
+  const { results } = await fetchAPIData('movie/now_playing');
+
+ results.forEach((movie)=> {
+  const div = document.createElement('div');
+  div.classList.add('swiper-slide');
+
+  div.innerHTML = ` 
+  <a href="movie-details.html?id=${movie.id}">
+    <img src="https://image.tmdb.org/t/p/w500${
+      movie.poster_path}" alt="${movie.title}" />
+  </a>
+  <h4 class="swiper-rating">
+    <i class="fas fa-star text-secondary"></i> ${movie.vote_average}/ 10
+  </h4>
+</div>`;
+
+  document.querySelector('.swiper-wrapper').appendChild(div);
+
+  initSwiper();
+ })
+}
+
+function initSwiper() {
+  const swiper = new Swiper('.swiper', {
+      sidesPerView: 1,
+      spaceBetween: 30,
+      freeMode: true,
+      loop: true,
+      autoplay: {
+        delay:4000,
+        disableOnInteraction: false
+        // it means if you hover:over it stops
+      }, 
+      breakpoints: {
+        500: {
+          slidePerview: 2
+        },
+        700: {
+          slidePerview: 3
+        }, 
+        1200: {
+          slidePerview: 4
+        },
+      }
+
+  });
+}
+
 // Fetch data from TMDB API
 async function fetchAPIData(endpoint) {
-  const API_KEY = '711af147f291a70353af78f4391c1d51'
-  const API_URL = 'https://api.themoviedb.org/3/';
+  const API_KEY = global.api.apiKey;
+  const API_URL = global.api.apiUrl;
   // endpoint here means the end point of the movie API
 
   showSpinner();
@@ -250,7 +422,27 @@ function showSpinner() {
 
 function hideSpinner() {
   document.querySelector('.spinner').classList.remove('show');
+} 
+
+// Making request for Search
+async function searchAPIData() {
+  const API_KEY = global.api.apiKey;
+  const API_URL = global.api.apiUrl;
+  // endpoint here means the end point of the movie API
+
+  showSpinner();
+
+  const response = await fetch(
+    `${API_URL}search/${global.search.type}?api_key=${API_KEY}&language=en-US&query=${global.search.term}&page=${global.search.page}`
+  );
+
+  const data = await response.json();
+
+  hideSpinner();
+
+  return data;
 }
+
 
 // Highlight active link
 function highlightActiveLink() {
@@ -260,6 +452,16 @@ function highlightActiveLink() {
       link.classList.add('active');
     }
   });
+}
+
+// Show Alert
+function showAlert(message, className = 'error') {
+  const alertEl = document.createElement('div');
+  alertEl.classList.add('alert', className);
+  alertEl.appendChild(document.createTextNode(message));
+  document.querySelector('#alert').appendChild(alertEl);
+
+  setTimeout(() => alertEl.remove(), 3000);
 }
 
 function addCommasToNumber(number) {
@@ -277,6 +479,7 @@ function init() {
   switch (global.currentPage) {
     case '/':
     case '/index.html':
+      displaySlider();
       displayPopularMovies();
       break;
     case '/shows.html':
@@ -292,7 +495,7 @@ function init() {
       console.log('tv-details');
       break;
     case '/search.html':
-      console.log('Search');
+      search();
       break;
   }
   highlightActiveLink();
